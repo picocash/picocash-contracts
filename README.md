@@ -28,6 +28,12 @@ forge test
 
 Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.moderato.tempo.xyz`) first; mainnet only behind the reference mint's hard caps. Note Tempo has no native gas token: fees are paid in the TIP-20 being transferred.
 
+## Deployments
+
+| Network | Address | Token | Notes |
+|---|---|---|---|
+| Moderato (testnet, 42431) | `0x4336A5914BFF9912050c6518fbF46e599336D384` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
+
 ## Security
 
 See [SECURITY.md](SECURITY.md). The headline attack surfaces: any path where outstanding supply can exceed vault balance, and any path that can freeze withdrawals.
