@@ -47,6 +47,10 @@ interface IPicocashVault {
     ///         corresponding control for withdrawals.
     function setDepositsPaused(bool paused) external;
 
+    /// @notice Return a token mistakenly sent to the vault. MUST revert for
+    ///         the backing token itself — custody never leaves via sweep.
+    function sweep(address strandedToken, address to) external;
+
     /// @notice Begin timelocked rotation to a new operator key.
     function proposeOperator(address newOperator) external;
 

@@ -10,6 +10,7 @@ Solidity contracts for [picocash](https://github.com/picocash/picocash) — priv
 - **Exit is sacred**: withdrawals are **never pausable**. Deposits may be paused; redemptions may not.
 - **Timelocked operator rotation** — no instant key swaps over custody.
 - **Memo-bound deposits**: a deposit is a TIP-20 `transferWithMemo(vault, amount, quoteId)` where the memo is the mint quote id; the mint's deposit oracle watches exactly that event (the memo is indexed on Tempo's TIP-20). The interface in [`src/interfaces/IPicocashVault.sol`](src/interfaces/IPicocashVault.sol) documents the full surface, including the allowance-based fallback and melt payouts.
+- **One vault per currency, provably bound**: the token is immutable, must have code at deployment, and `vault.token()` is the on-chain authority the mint checks its unit (`tip20:<chain_id>:<token_address>`) against at startup. Tokens sent to the vault by mistake can be returned via `sweep` — which structurally cannot touch the backing token.
 
 The protocol spec lives in the main repo: [`spec/05-vault.md`](https://github.com/picocash/picocash/blob/main/spec/05-vault.md) (design constraints) and [`spec/03-mint-api.md`](https://github.com/picocash/picocash/blob/main/spec/03-mint-api.md) (the mint that consumes these events). Per the build order, the vault is implemented **against the already-running mint** — the interface here is dictated by a live consumer, not guessed.
 
@@ -23,8 +24,8 @@ forge test
 ```
 
 - `src/interfaces/` — `IPicocashVault` (draft)
-- `src/` — vault implementation (build step 5, in progress)
-- `test/` — Foundry tests incl. fuzzed solvency-invariant properties (with the implementation)
+- `src/PicocashVault.sol` — implemented and deployed (see Deployments)
+- `test/` — Foundry tests incl. fuzzed withdraw-vs-balance, rotation timelock, and sweep guards
 
 Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.moderato.tempo.xyz`) first; mainnet only behind the reference mint's hard caps. Note Tempo has no native gas token: fees are paid in the TIP-20 being transferred.
 
@@ -32,7 +33,7 @@ Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.m
 
 | Network | Address | Token | Notes |
 |---|---|---|---|
-| Moderato (testnet, 42431) | `0x4336A5914BFF9912050c6518fbF46e599336D384` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
+| Moderato (testnet, 42431) | `0x8431C3ce797995B75d18c30cBe9a06B9F1D377B9` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
 
 ## Security
 

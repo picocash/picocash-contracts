@@ -105,6 +105,32 @@ contract PicocashVaultTest is Test {
         vault.publishOutstandingSupply(bytes8(0x00cb743b02e43088), 500);
     }
 
+    // --- token binding & sweep ---
+
+    function test_constructor_rejectsCodelessToken() public {
+        vm.expectRevert(PicocashVault.TokenHasNoCode.selector);
+        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK);
+    }
+
+    function test_sweep_returnsStrandedTokens_neverBacking() public {
+        MockTIP20 stranded = new MockTIP20();
+        stranded.mint(address(vault), 777);
+        _fund(1000); // backing balance
+
+        vm.prank(alice);
+        vm.expectRevert(PicocashVault.NotOperator.selector);
+        vault.sweep(address(stranded), alice);
+
+        vm.startPrank(operator);
+        vm.expectRevert(PicocashVault.CannotSweepBackingToken.selector);
+        vault.sweep(address(token), operator);
+
+        vault.sweep(address(stranded), bob);
+        vm.stopPrank();
+        assertEq(stranded.balanceOf(bob), 777);
+        assertEq(token.balanceOf(address(vault)), 1000); // backing untouched
+    }
+
     // --- operator rotation ---
 
     function test_rotation_timelocked() public {

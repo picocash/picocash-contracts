@@ -31,10 +31,13 @@ contract PicocashVault is IPicocashVault {
     error TimelockNotElapsed(uint256 eta);
     error ZeroAddress();
     error TokenTransferFailed();
+    error TokenHasNoCode();
+    error CannotSweepBackingToken();
 
     event OperatorProposed(address indexed newOperator, uint256 eta);
     event OperatorRotated(address indexed oldOperator, address indexed newOperator);
     event DepositsPausedSet(bool paused);
+    event Swept(address indexed strandedToken, address indexed to, uint256 amount);
 
     modifier onlyOperator() {
         if (msg.sender != _operator) revert NotOperator();
@@ -43,6 +46,8 @@ contract PicocashVault is IPicocashVault {
 
     constructor(address token_, address operator_, uint256 rotationTimelock_) {
         if (token_ == address(0) || operator_ == address(0)) revert ZeroAddress();
+        // The vault IS its token binding — refuse to deploy bound to nothing.
+        if (token_.code.length == 0) revert TokenHasNoCode();
         _token = ITIP20(token_);
         _operator = operator_;
         rotationTimelock = rotationTimelock_;
@@ -92,6 +97,17 @@ contract PicocashVault is IPicocashVault {
         emit OperatorRotated(_operator, pendingOperator);
         _operator = pendingOperator;
         pendingOperator = address(0);
+    }
+
+    /// @notice Return tokens mistakenly sent to the vault. The backing token
+    ///         is structurally unsweepable — custody can never leave via this
+    ///         path, only strangers' mistakes can be undone.
+    function sweep(address strandedToken, address to) external onlyOperator {
+        if (to == address(0)) revert ZeroAddress();
+        if (strandedToken == address(_token)) revert CannotSweepBackingToken();
+        uint256 amount = ITIP20(strandedToken).balanceOf(address(this));
+        if (!ITIP20(strandedToken).transfer(to, amount)) revert TokenTransferFailed();
+        emit Swept(strandedToken, to, amount);
     }
 
     function token() external view returns (address) {
