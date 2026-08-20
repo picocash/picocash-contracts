@@ -9,8 +9,9 @@ pragma solidity ^0.8.24;
 /// Design constraints (settled, non-negotiable):
 ///  - Solvency invariant: vault balance >= outstanding token supply per keyset;
 ///    outstanding supply is published on-chain per epoch so anyone can verify
-///    (proof of liabilities beats "trust me").
-///  - Withdrawals are NEVER pausable — holders must always be able to exit.
+///    (operator-attested liabilities, checkable against the on-chain balance).
+///  - Payouts are NEVER contract-pausable — holders must always be able to exit
+///    (liveness still depends on the operator signing melts).
 ///    Deposits MAY be paused.
 ///  - Operator key rotation is timelocked.
 ///
@@ -81,7 +82,7 @@ interface IPicocashVault {
     /// @param meltId The mint's melt quote id; one payout per meltId.
     function ecashMelt(address to, uint256 amount, bytes32 meltId) external;
 
-    /// @notice Publish outstanding token supply for a keyset (proof of liabilities).
+    /// @notice Publish outstanding token supply for a keyset (operator attestation).
     ///         `keysetId` is the mint's 8-byte keyset id.
     function publishOutstandingSupply(bytes8 keysetId, uint256 outstanding) external;
 

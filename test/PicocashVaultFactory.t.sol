@@ -21,7 +21,9 @@ contract PicocashVaultFactoryTest is Test {
     function _deploy() internal returns (PicocashVault) {
         vm.prank(customer);
         return PicocashVault(
-            factory.deployVault(address(token), operator, 2 days, 1000, 100, 100_000, "acme mint", "https://mint.acme.dev")
+            factory.deployVault(
+                address(token), operator, 2 days, 1000, 100, 100_000, "acme mint", "https://mint.acme.dev"
+            )
         );
     }
 

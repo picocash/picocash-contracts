@@ -16,7 +16,8 @@ contract PicocashVaultTest is Test {
 
     function setUp() public {
         token = new MockTIP20();
-        vault = new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, 100_000, "test mint", "http://mint.test");
+        vault =
+            new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, 100_000, "test mint", "http://mint.test");
         token.mint(alice, 10_000_000); // $10
         // a vault with an interval rule is born overdue; establish the baseline attestation
         vm.prank(operator);
@@ -212,9 +213,7 @@ contract PicocashVaultTest is Test {
         vault.proposeMaxMeltFeeIncrease(40_000);
 
         vault.proposeMaxMeltFeeIncrease(80_000);
-        vm.expectRevert(
-            abi.encodeWithSelector(PicocashVault.TimelockNotElapsed.selector, block.timestamp + TIMELOCK)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PicocashVault.TimelockNotElapsed.selector, block.timestamp + TIMELOCK));
         vault.applyMaxMeltFeeIncrease();
 
         vm.warp(block.timestamp + TIMELOCK);
@@ -236,9 +235,7 @@ contract PicocashVaultTest is Test {
         vault.proposeOperator(bob);
 
         vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(PicocashVault.TimelockNotElapsed.selector, block.timestamp + TIMELOCK)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PicocashVault.TimelockNotElapsed.selector, block.timestamp + TIMELOCK));
         vault.acceptOperator();
 
         vm.warp(block.timestamp + TIMELOCK);

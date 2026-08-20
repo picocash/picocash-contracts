@@ -6,9 +6,9 @@ Solidity contracts for [picocash](https://github.com/picocash/picocash) — priv
 
 ## What the vault must guarantee
 
-- **1:1 backing, provable**: vault balance ≥ outstanding token supply per keyset, with outstanding supply published on-chain each epoch — anyone can check solvency (proof of liabilities, not "trust me").
-- **Exit is sacred**: withdrawals are **never pausable**. Deposits may be paused; redemptions may not.
-- **Timelocked operator rotation** — no instant key swaps over custody.
+- **1:1 backing, checkable**: vault balance ≥ outstanding token supply per keyset. The *balance* is on-chain truth; the *outstanding supply* is an operator attestation published on-chain under a committed policy. Anyone can compare the two; a lying operator is caught by holders whose tokens stop redeeming, not by the contract.
+- **Exit is sacred**: `ecashMelt` has no pause switch — the contract cannot be told to stop paying out. What it cannot do is force the operator to sign melts: a mint that goes offline is a liveness failure the contract does not cure. Deposits may be paused; payouts may not.
+- **Timelocked operator rotation** — no instant key swaps over custody. The timelock length is a per-deployment constructor argument (the testnet vaults use 2 days); check `info()` before trusting a vault.
 - **Memo-bound deposits**: a deposit is a TIP-20 `transferWithMemo(vault, amount, quoteId)` where the memo is the mint quote id; the mint's deposit oracle watches exactly that event (the memo is indexed on Tempo's TIP-20). The interface in [`src/interfaces/IPicocashVault.sol`](src/interfaces/IPicocashVault.sol) documents the full surface, including the allowance-based fallback and melt payouts.
 - **One vault per currency, provably bound**: the token is immutable, must have code at deployment, and `vault.token()` is the on-chain authority the mint checks its unit (`tip20:<chain_id>:<token_address>`) against at startup. Tokens sent to the vault by mistake can be returned via `sweep` — which structurally cannot touch the backing token.
 
@@ -35,7 +35,7 @@ Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.m
 
 **Publication policy**: every vault commits at deployment to at least one solvency-publication rule — a balance-drift threshold (bps) that makes a publication *due*, and/or a block interval whose breach makes it *overdue*. While overdue, `ecashMint` (allowance deposits) reverts — a mint that stops attesting stops taking new money; `ecashMelt` is never affected. `isPublicationDue()` / `isPublicationOverdue()` make both rules machine-checkable, so silence from a mint has a defined, queryable meaning.
 
-**Melt-fee ceiling** (`maxMeltFee`): the on-chain cap on the exit tax. The mint must never quote a melt fee above it (the reference mint refuses to start otherwise); wallets should check it before depositing. Decreases are instant; increases go through the rotation timelock — raising the cost of leaving requires the same public notice as changing who controls custody.
+**Melt-fee ceiling** (`maxMeltFee`): the on-chain cap on the exit tax. The mint must never quote a melt fee above it (the reference mint refuses to start otherwise); wallets should read it on-chain before depositing — it is the only fee ceiling a wallet can enforce. Decreases are instant; increases go through the rotation timelock — raising the cost of leaving requires the same public notice as changing who controls custody.
 
 ## Deployments
 

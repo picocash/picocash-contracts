@@ -16,6 +16,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Format check
+        run: forge fmt --check
+
       - name: Build (pinned solc, via-ir — settings are part of the verification surface)
         run: forge build --sizes
 

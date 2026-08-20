@@ -9,7 +9,7 @@ import {PicocashVault} from "./PicocashVault.sol";
 ///         two things:
 ///
 ///         1. **Provenance**: `isVault(addr)` proves a vault runs exactly this
-///            audited bytecode — never-pausable withdrawals, one payout per
+///            audited bytecode — never-pausable payouts, one payout per
 ///            meltId, timelocked rotation. Services allowlisting mints can
 ///            check it in one call instead of verifying source per vault.
 ///         2. **Discovery**: `VaultDeployed` events + the `vaults` array
@@ -62,7 +62,15 @@ contract PicocashVaultFactory {
         isVault[vault] = true;
         vaults.push(vault);
         emit VaultDeployed(
-            vault, token, operator, name, mintUrl, rotationTimelock, publishThresholdBps, publishIntervalBlocks, maxMeltFee
+            vault,
+            token,
+            operator,
+            name,
+            mintUrl,
+            rotationTimelock,
+            publishThresholdBps,
+            publishIntervalBlocks,
+            maxMeltFee
         );
     }
 
