@@ -12,7 +12,7 @@ Solidity contracts for [picocash](https://github.com/picocash/picocash) — priv
 - **Memo-bound deposits**: a deposit is a TIP-20 `transferWithMemo(vault, amount, quoteId)` where the memo is the mint quote id; the mint's deposit oracle watches exactly that event (the memo is indexed on Tempo's TIP-20). The interface in [`src/interfaces/IPicocashVault.sol`](src/interfaces/IPicocashVault.sol) documents the full surface, including the allowance-based fallback and melt payouts.
 - **One vault per currency, provably bound**: the token is immutable, must have code at deployment, and `vault.token()` is the on-chain authority the mint checks its unit (`tip20:<chain_id>:<token_address>`) against at startup. Tokens sent to the vault by mistake can be returned via `sweep` — which structurally cannot touch the backing token.
 
-The protocol spec lives in the main repo: [`spec/05-vault.md`](https://github.com/picocash/picocash/blob/main/spec/05-vault.md) (design constraints) and [`spec/03-mint-api.md`](https://github.com/picocash/picocash/blob/main/spec/03-mint-api.md) (the mint that consumes these events). Per the build order, the vault is implemented **against the already-running mint** — the interface here is dictated by a live consumer, not guessed.
+The protocol specs live in [picocash/pips](https://github.com/picocash/pips): [PIP-04](https://github.com/picocash/pips/blob/main/PIP-04.md) (design constraints) and [PIP-02](https://github.com/picocash/pips/blob/main/PIP-02.md) (the mint that consumes these events). Per the build order, the vault is implemented **against the already-running mint** — the interface here is dictated by a live consumer, not guessed.
 
 ## Layout & tooling
 
