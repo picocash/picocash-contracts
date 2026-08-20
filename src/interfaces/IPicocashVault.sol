@@ -21,9 +21,34 @@ pragma solidity ^0.8.24;
 /// event shape today (against the operator EOA it replaces). `ecashMint()` below
 /// is the secondary allowance-based flow for callers that cannot emit memos.
 interface IPicocashVault {
+    /// @notice On-chain mint discovery record — the stable subset of the mint
+    ///         server's `GET /v1/info`, plus live custody/solvency figures.
+    struct MintInfo {
+        string name;
+        /// @dev Base URL of the mint's HTTP API (`/v1/…`).
+        string mintUrl;
+        address token;
+        address operator;
+        /// @dev The mint's currently active 8-byte keyset id.
+        bytes8 activeKeysetId;
+        bool depositsPaused;
+        /// @dev Current backing balance (live `token.balanceOf(vault)`).
+        uint256 balance;
+        /// @dev Outstanding supply as of the last publication (0 if never published).
+        uint256 lastOutstanding;
+        /// @dev Timestamp of the last solvency publication (0 if never).
+        uint256 lastPublishedAt;
+    }
+
     /// @notice Emitted for allowance-based deposits (the memo-transfer flow
     ///         emits the token's own TransferWithMemo event instead).
     event EcashMintDeposit(bytes32 indexed mintQuoteId, address indexed from, uint256 amount);
+
+    /// @notice Emitted when the operator updates the discovery metadata.
+    event MintInfoUpdated(string name, string mintUrl);
+
+    /// @notice Emitted when the operator advertises a new active keyset.
+    event ActiveKeysetSet(bytes8 indexed keysetId);
 
     /// @notice Emitted on every melt payout.
     event EcashMeltPayout(bytes32 indexed meltId, address indexed to, uint256 amount);
@@ -56,6 +81,16 @@ interface IPicocashVault {
 
     /// @notice Complete rotation after the timelock has elapsed.
     function acceptOperator() external;
+
+    /// @notice Update the mint's discovery metadata (name, API base URL).
+    function setMintInfo(string calldata name_, string calldata mintUrl_) external;
+
+    /// @notice Advertise the mint's active keyset (call on rotation).
+    function setActiveKeyset(bytes8 keysetId) external;
+
+    /// @notice One-call discovery + solvency read: everything a client needs
+    ///         to find the mint and judge its backing.
+    function info() external view returns (MintInfo memory);
 
     function token() external view returns (address);
     function operator() external view returns (address);

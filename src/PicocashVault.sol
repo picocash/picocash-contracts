@@ -24,6 +24,13 @@ contract PicocashVault is IPicocashVault {
     /// @notice One payout per melt id, forever.
     mapping(bytes32 meltId => bool paid) public meltPaid;
 
+    // --- mint discovery metadata (operator-maintained, read via info()) ---
+    string private _name;
+    string private _mintUrl;
+    bytes8 private _activeKeysetId;
+    uint256 public lastOutstanding;
+    uint256 public lastPublishedAt;
+
     error NotOperator();
     error NotPendingOperator();
     error DepositsArePaused();
@@ -44,13 +51,21 @@ contract PicocashVault is IPicocashVault {
         _;
     }
 
-    constructor(address token_, address operator_, uint256 rotationTimelock_) {
+    constructor(
+        address token_,
+        address operator_,
+        uint256 rotationTimelock_,
+        string memory name_,
+        string memory mintUrl_
+    ) {
         if (token_ == address(0) || operator_ == address(0)) revert ZeroAddress();
         // The vault IS its token binding — refuse to deploy bound to nothing.
         if (token_.code.length == 0) revert TokenHasNoCode();
         _token = ITIP20(token_);
         _operator = operator_;
         rotationTimelock = rotationTimelock_;
+        _name = name_;
+        _mintUrl = mintUrl_;
     }
 
     /// @inheritdoc IPicocashVault
@@ -73,7 +88,37 @@ contract PicocashVault is IPicocashVault {
 
     /// @inheritdoc IPicocashVault
     function publishOutstandingSupply(bytes8 keysetId, uint256 outstanding) external onlyOperator {
+        lastOutstanding = outstanding;
+        lastPublishedAt = block.timestamp;
         emit OutstandingSupplyPublished(keysetId, outstanding, _token.balanceOf(address(this)));
+    }
+
+    /// @inheritdoc IPicocashVault
+    function setMintInfo(string calldata name_, string calldata mintUrl_) external onlyOperator {
+        _name = name_;
+        _mintUrl = mintUrl_;
+        emit MintInfoUpdated(name_, mintUrl_);
+    }
+
+    /// @inheritdoc IPicocashVault
+    function setActiveKeyset(bytes8 keysetId) external onlyOperator {
+        _activeKeysetId = keysetId;
+        emit ActiveKeysetSet(keysetId);
+    }
+
+    /// @inheritdoc IPicocashVault
+    function info() external view returns (MintInfo memory) {
+        return MintInfo({
+            name: _name,
+            mintUrl: _mintUrl,
+            token: address(_token),
+            operator: _operator,
+            activeKeysetId: _activeKeysetId,
+            depositsPaused: _depositsPaused,
+            balance: _token.balanceOf(address(this)),
+            lastOutstanding: lastOutstanding,
+            lastPublishedAt: lastPublishedAt
+        });
     }
 
     /// @inheritdoc IPicocashVault

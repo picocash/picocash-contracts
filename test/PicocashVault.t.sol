@@ -16,7 +16,7 @@ contract PicocashVaultTest is Test {
 
     function setUp() public {
         token = new MockTIP20();
-        vault = new PicocashVault(address(token), operator, TIMELOCK);
+        vault = new PicocashVault(address(token), operator, TIMELOCK, "test mint", "http://mint.test");
         token.mint(alice, 10_000_000); // $10
     }
 
@@ -109,7 +109,7 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_rejectsCodelessToken() public {
         vm.expectRevert(PicocashVault.TokenHasNoCode.selector);
-        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK);
+        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, "x", "http://x");
     }
 
     function test_sweep_returnsStrandedTokens_neverBacking() public {
