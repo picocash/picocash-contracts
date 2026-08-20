@@ -46,6 +46,9 @@ interface IPicocashVault {
         uint64 publishIntervalBlocks;
         /// @dev True when either policy rule says a publication should happen now.
         bool publicationDue;
+        /// @dev On-chain ceiling on the mint's melt fee (base units). The mint
+        ///      MUST NOT quote above it; wallets SHOULD check before depositing.
+        uint256 maxMeltFee;
     }
 
     /// @notice Emitted for allowance-based deposits (the memo-transfer flow
@@ -57,6 +60,12 @@ interface IPicocashVault {
 
     /// @notice Emitted when the operator advertises a new active keyset.
     event ActiveKeysetSet(bytes8 indexed keysetId);
+
+    /// @notice Emitted when a melt-fee-ceiling increase is proposed (timelocked).
+    event MaxMeltFeeIncreaseProposed(uint256 newMaxMeltFee, uint256 eta);
+
+    /// @notice Emitted when the ceiling changes (instant decrease or applied increase).
+    event MaxMeltFeeChanged(uint256 oldMaxMeltFee, uint256 newMaxMeltFee);
 
     /// @notice Emitted on every melt payout.
     event EcashMeltPayout(bytes32 indexed meltId, address indexed to, uint256 amount);
@@ -95,6 +104,18 @@ interface IPicocashVault {
 
     /// @notice Advertise the mint's active keyset (call on rotation).
     function setActiveKeyset(bytes8 keysetId) external;
+
+    /// @notice Lower the melt-fee ceiling — user-favorable, takes effect instantly.
+    function decreaseMaxMeltFee(uint256 newMaxMeltFee) external;
+
+    /// @notice Propose raising the melt-fee ceiling; applies only after the
+    ///         rotation timelock elapses. Raising the exit tax requires public notice.
+    function proposeMaxMeltFeeIncrease(uint256 newMaxMeltFee) external;
+
+    /// @notice Apply a proposed increase after its timelock.
+    function applyMaxMeltFeeIncrease() external;
+
+    function maxMeltFee() external view returns (uint256);
 
     /// @notice One-call discovery + solvency read: everything a client needs
     ///         to find the mint and judge its backing.

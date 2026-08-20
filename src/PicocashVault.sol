@@ -39,12 +39,21 @@ contract PicocashVault is IPicocashVault {
     /// @notice Max blocks between publications (0 = unset).
     uint64 public immutable publishIntervalBlocks;
 
+    // --- melt-fee ceiling: the on-chain cap on the exit tax ---
+    /// @notice The mint MUST NOT quote a melt fee above this (base units).
+    uint256 public maxMeltFee;
+    uint256 public pendingMaxMeltFee;
+    uint256 public maxMeltFeeIncreaseEta;
+
     error NotOperator();
     error NotPendingOperator();
     error DepositsArePaused();
     error NoPublicationPolicy();
     error InvalidThreshold();
     error PublicationOverdue();
+    error NotADecrease();
+    error NotAnIncrease();
+    error NoPendingIncrease();
     error MeltAlreadyPaid(bytes32 meltId);
     error TimelockNotElapsed(uint256 eta);
     error ZeroAddress();
@@ -68,6 +77,7 @@ contract PicocashVault is IPicocashVault {
         uint256 rotationTimelock_,
         uint16 publishThresholdBps_,
         uint64 publishIntervalBlocks_,
+        uint256 maxMeltFee_,
         string memory name_,
         string memory mintUrl_
     ) {
@@ -82,6 +92,7 @@ contract PicocashVault is IPicocashVault {
         rotationTimelock = rotationTimelock_;
         publishThresholdBps = publishThresholdBps_;
         publishIntervalBlocks = publishIntervalBlocks_;
+        maxMeltFee = maxMeltFee_;
         _name = name_;
         _mintUrl = mintUrl_;
     }
@@ -138,6 +149,30 @@ contract PicocashVault is IPicocashVault {
     }
 
     /// @inheritdoc IPicocashVault
+    function decreaseMaxMeltFee(uint256 newMaxMeltFee) external onlyOperator {
+        if (newMaxMeltFee >= maxMeltFee) revert NotADecrease();
+        emit MaxMeltFeeChanged(maxMeltFee, newMaxMeltFee);
+        maxMeltFee = newMaxMeltFee;
+    }
+
+    /// @inheritdoc IPicocashVault
+    function proposeMaxMeltFeeIncrease(uint256 newMaxMeltFee) external onlyOperator {
+        if (newMaxMeltFee <= maxMeltFee) revert NotAnIncrease();
+        pendingMaxMeltFee = newMaxMeltFee;
+        maxMeltFeeIncreaseEta = block.timestamp + rotationTimelock;
+        emit MaxMeltFeeIncreaseProposed(newMaxMeltFee, maxMeltFeeIncreaseEta);
+    }
+
+    /// @inheritdoc IPicocashVault
+    function applyMaxMeltFeeIncrease() external onlyOperator {
+        if (pendingMaxMeltFee == 0) revert NoPendingIncrease();
+        if (block.timestamp < maxMeltFeeIncreaseEta) revert TimelockNotElapsed(maxMeltFeeIncreaseEta);
+        emit MaxMeltFeeChanged(maxMeltFee, pendingMaxMeltFee);
+        maxMeltFee = pendingMaxMeltFee;
+        pendingMaxMeltFee = 0;
+    }
+
+    /// @inheritdoc IPicocashVault
     function setMintInfo(string calldata name_, string calldata mintUrl_) external onlyOperator {
         _name = name_;
         _mintUrl = mintUrl_;
@@ -165,7 +200,8 @@ contract PicocashVault is IPicocashVault {
             lastPublishedBlock: lastPublishedBlock,
             publishThresholdBps: publishThresholdBps,
             publishIntervalBlocks: publishIntervalBlocks,
-            publicationDue: isPublicationDue()
+            publicationDue: isPublicationDue(),
+            maxMeltFee: maxMeltFee
         });
     }
 

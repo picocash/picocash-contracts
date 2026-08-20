@@ -31,16 +31,18 @@ Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.m
 
 ## Factory & discovery
 
-`PicocashVaultFactory.deployVault(token, operator, timelock, publishThresholdBps, publishIntervalBlocks, name, mintUrl)` is how vaults are born: permissionless, zero authority retained. `isVault(addr)` proves a vault runs the canonical bytecode (the one-call allowlist check for services), and `VaultDeployed` events plus the `vaults[]` array enumerate every picocash vault on the chain. Each vault's read-only `info()` returns the on-chain mint record — name, mint API URL, token, operator, active keyset, deposits-paused flag, live backing balance, the last published outstanding supply with its timestamp, and the publication policy with its current due-state. Discovery and solvency in a single `eth_call`: factory → vault → mint URL → keys, no off-chain registry.
+`PicocashVaultFactory.deployVault(token, operator, timelock, publishThresholdBps, publishIntervalBlocks, maxMeltFee, name, mintUrl)` is how vaults are born: permissionless, zero authority retained. `isVault(addr)` proves a vault runs the canonical bytecode (the one-call allowlist check for services), and `VaultDeployed` events plus the `vaults[]` array enumerate every picocash vault on the chain. Each vault's read-only `info()` returns the on-chain mint record — name, mint API URL, token, operator, active keyset, deposits-paused flag, live backing balance, the last published outstanding supply with its timestamp, and the publication policy with its current due-state. Discovery and solvency in a single `eth_call`: factory → vault → mint URL → keys, no off-chain registry.
 
 **Publication policy**: every vault commits at deployment to at least one solvency-publication rule — a balance-drift threshold (bps) that makes a publication *due*, and/or a block interval whose breach makes it *overdue*. While overdue, `ecashMint` (allowance deposits) reverts — a mint that stops attesting stops taking new money; `ecashMelt` is never affected. `isPublicationDue()` / `isPublicationOverdue()` make both rules machine-checkable, so silence from a mint has a defined, queryable meaning.
+
+**Melt-fee ceiling** (`maxMeltFee`): the on-chain cap on the exit tax. The mint must never quote a melt fee above it (the reference mint refuses to start otherwise); wallets should check it before depositing. Decreases are instant; increases go through the rotation timelock — raising the cost of leaving requires the same public notice as changing who controls custody.
 
 ## Deployments
 
 | Network | Contract | Address |
 |---|---|---|
-| Moderato (testnet, 42431) | **PicocashVaultFactory** | `0x265575FB832A0beD1cb2eB565569c4b23aD79518` |
-| Moderato (testnet, 42431) | PicocashVault (dev mint, via factory) | `0x64Fa5173dF59adcdAAe6e2F0E7cb70bE692C9ce2` |
+| Moderato (testnet, 42431) | **PicocashVaultFactory** | `0xbcaa0658103C88B30c7028d2f28964403AEf0BFe` |
+| Moderato (testnet, 42431) | PicocashVault (dev mint, via factory) | `0xd409D3c16F3472bD75fb86eF3f2D69d602F3cfA3` |
 
 Token pathUSD `0x20c0…0000`, 2-day rotation timelock, test funds only.
 

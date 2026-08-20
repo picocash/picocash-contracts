@@ -29,7 +29,8 @@ contract PicocashVaultFactory {
         string mintUrl,
         uint256 rotationTimelock,
         uint16 publishThresholdBps,
-        uint64 publishIntervalBlocks
+        uint64 publishIntervalBlocks,
+        uint256 maxMeltFee
     );
 
     /// @notice True iff the address was deployed by this factory.
@@ -49,15 +50,20 @@ contract PicocashVaultFactory {
         uint256 rotationTimelock,
         uint16 publishThresholdBps,
         uint64 publishIntervalBlocks,
+        uint256 maxMeltFee,
         string calldata name,
         string calldata mintUrl
     ) external returns (address vault) {
         vault = address(
-            new PicocashVault(token, operator, rotationTimelock, publishThresholdBps, publishIntervalBlocks, name, mintUrl)
+            new PicocashVault(
+                token, operator, rotationTimelock, publishThresholdBps, publishIntervalBlocks, maxMeltFee, name, mintUrl
+            )
         );
         isVault[vault] = true;
         vaults.push(vault);
-        emit VaultDeployed(vault, token, operator, name, mintUrl, rotationTimelock, publishThresholdBps, publishIntervalBlocks);
+        emit VaultDeployed(
+            vault, token, operator, name, mintUrl, rotationTimelock, publishThresholdBps, publishIntervalBlocks, maxMeltFee
+        );
     }
 
     function vaultCount() external view returns (uint256) {

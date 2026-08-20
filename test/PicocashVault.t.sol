@@ -16,7 +16,7 @@ contract PicocashVaultTest is Test {
 
     function setUp() public {
         token = new MockTIP20();
-        vault = new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, "test mint", "http://mint.test");
+        vault = new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, 100_000, "test mint", "http://mint.test");
         token.mint(alice, 10_000_000); // $10
         // a vault with an interval rule is born overdue; establish the baseline attestation
         vm.prank(operator);
@@ -112,7 +112,7 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_rejectsCodelessToken() public {
         vm.expectRevert(PicocashVault.TokenHasNoCode.selector);
-        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, 1000, 0, "x", "http://x");
+        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, 1000, 0, 100_000, "x", "http://x");
     }
 
     function test_sweep_returnsStrandedTokens_neverBacking() public {
@@ -138,9 +138,9 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_requiresAPolicy() public {
         vm.expectRevert(PicocashVault.NoPublicationPolicy.selector);
-        new PicocashVault(address(token), operator, TIMELOCK, 0, 0, "x", "http://x");
+        new PicocashVault(address(token), operator, TIMELOCK, 0, 0, 100_000, "x", "http://x");
         vm.expectRevert(PicocashVault.InvalidThreshold.selector);
-        new PicocashVault(address(token), operator, TIMELOCK, 10_001, 0, "x", "http://x");
+        new PicocashVault(address(token), operator, TIMELOCK, 10_001, 0, 100_000, "x", "http://x");
     }
 
     function test_overdue_blocksAllowanceDeposits_neverMelts() public {
@@ -187,6 +187,46 @@ contract PicocashVaultTest is Test {
         vm.prank(operator);
         vault.publishOutstandingSupply(bytes8(0), 1_110_000); // rebases the drift
         assertFalse(vault.isPublicationDue());
+    }
+
+    // --- melt-fee ceiling ---
+
+    function test_maxMeltFee_decreaseInstant_increaseTimelocked() public {
+        assertEq(vault.maxMeltFee(), 100_000);
+
+        vm.prank(alice);
+        vm.expectRevert(PicocashVault.NotOperator.selector);
+        vault.decreaseMaxMeltFee(50_000);
+
+        // lowering the exit tax is instant
+        vm.prank(operator);
+        vault.decreaseMaxMeltFee(50_000);
+        assertEq(vault.maxMeltFee(), 50_000);
+
+        vm.startPrank(operator);
+        vm.expectRevert(PicocashVault.NotADecrease.selector);
+        vault.decreaseMaxMeltFee(60_000);
+
+        // raising it requires public notice via the rotation timelock
+        vm.expectRevert(PicocashVault.NotAnIncrease.selector);
+        vault.proposeMaxMeltFeeIncrease(40_000);
+
+        vault.proposeMaxMeltFeeIncrease(80_000);
+        vm.expectRevert(
+            abi.encodeWithSelector(PicocashVault.TimelockNotElapsed.selector, block.timestamp + TIMELOCK)
+        );
+        vault.applyMaxMeltFeeIncrease();
+
+        vm.warp(block.timestamp + TIMELOCK);
+        vault.applyMaxMeltFeeIncrease();
+        assertEq(vault.maxMeltFee(), 80_000);
+        assertEq(vault.pendingMaxMeltFee(), 0);
+
+        vm.expectRevert(PicocashVault.NoPendingIncrease.selector);
+        vault.applyMaxMeltFeeIncrease();
+        vm.stopPrank();
+
+        assertEq(vault.info().maxMeltFee, 80_000);
     }
 
     // --- operator rotation ---
