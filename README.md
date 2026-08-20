@@ -2,7 +2,7 @@
 
 > **Status: pre-alpha, interface draft.** Nothing here is deployed or audited. Do not use with real funds.
 
-Solidity contracts for [picocash](https://github.com/picocash/picocash) — private, instant eCash for machine payments, backed 1:1 by USDC.e on [Tempo](https://tempo.xyz). This repo holds the on-chain half: the **vault** that custodies the stablecoin backing outstanding eCash tokens.
+Solidity contracts for [picocash](https://github.com/picocash/picocash) — private, instant eCash for machine payments, backed 1:1 by TIP-20 stablecoins (e.g. USDC.e) on [Tempo](https://tempo.xyz). This repo holds the on-chain half: the **vault** that custodies the stablecoin backing outstanding eCash tokens.
 
 ## What the vault must guarantee
 
