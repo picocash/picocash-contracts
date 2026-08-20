@@ -16,8 +16,11 @@ contract PicocashVaultTest is Test {
 
     function setUp() public {
         token = new MockTIP20();
-        vault = new PicocashVault(address(token), operator, TIMELOCK, "test mint", "http://mint.test");
+        vault = new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, "test mint", "http://mint.test");
         token.mint(alice, 10_000_000); // $10
+        // a vault with an interval rule is born overdue; establish the baseline attestation
+        vm.prank(operator);
+        vault.publishOutstandingSupply(bytes8(0), 0);
     }
 
     // --- deposits ---
@@ -109,7 +112,7 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_rejectsCodelessToken() public {
         vm.expectRevert(PicocashVault.TokenHasNoCode.selector);
-        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, "x", "http://x");
+        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, 1000, 0, "x", "http://x");
     }
 
     function test_sweep_returnsStrandedTokens_neverBacking() public {
@@ -129,6 +132,61 @@ contract PicocashVaultTest is Test {
         vm.stopPrank();
         assertEq(stranded.balanceOf(bob), 777);
         assertEq(token.balanceOf(address(vault)), 1000); // backing untouched
+    }
+
+    // --- publication policy ---
+
+    function test_constructor_requiresAPolicy() public {
+        vm.expectRevert(PicocashVault.NoPublicationPolicy.selector);
+        new PicocashVault(address(token), operator, TIMELOCK, 0, 0, "x", "http://x");
+        vm.expectRevert(PicocashVault.InvalidThreshold.selector);
+        new PicocashVault(address(token), operator, TIMELOCK, 10_001, 0, "x", "http://x");
+    }
+
+    function test_overdue_blocksAllowanceDeposits_neverMelts() public {
+        _fund(500);
+        assertFalse(vault.isPublicationOverdue());
+
+        vm.roll(block.number + 101); // past the 100-block interval
+        assertTrue(vault.isPublicationOverdue());
+
+        // deposits gated…
+        vm.startPrank(alice);
+        token.approve(address(vault), 100);
+        vm.expectRevert(PicocashVault.PublicationOverdue.selector);
+        vault.ecashMint(100, bytes32(0));
+        vm.stopPrank();
+
+        // …but exit is sacred: melts pay out even while overdue
+        vm.prank(operator);
+        vault.ecashMelt(bob, 100, bytes32(uint256(42)));
+        assertEq(token.balanceOf(bob), 100);
+
+        // publishing clears the gate
+        vm.prank(operator);
+        vault.publishOutstandingSupply(bytes8(0), 400);
+        assertFalse(vault.isPublicationOverdue());
+        vm.startPrank(alice);
+        token.approve(address(vault), 100);
+        vault.ecashMint(100, bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_thresholdRule_triggersDue() public {
+        _fund(1_000_000);
+        vm.prank(operator);
+        vault.publishOutstandingSupply(bytes8(0), 1_000_000); // baseline: balance 1_000_000
+
+        token.mint(address(vault), 50_000); // +5% drift: under the 10% threshold
+        assertFalse(vault.isPublicationDue());
+
+        token.mint(address(vault), 60_000); // +11% total drift: over threshold
+        assertTrue(vault.isPublicationDue());
+        assertFalse(vault.isPublicationOverdue()); // soft trigger, not a breach — nothing is blocked
+
+        vm.prank(operator);
+        vault.publishOutstandingSupply(bytes8(0), 1_110_000); // rebases the drift
+        assertFalse(vault.isPublicationDue());
     }
 
     // --- operator rotation ---

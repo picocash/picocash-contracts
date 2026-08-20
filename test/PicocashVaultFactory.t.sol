@@ -21,7 +21,7 @@ contract PicocashVaultFactoryTest is Test {
     function _deploy() internal returns (PicocashVault) {
         vm.prank(customer);
         return PicocashVault(
-            factory.deployVault(address(token), operator, 2 days, "acme mint", "https://mint.acme.dev")
+            factory.deployVault(address(token), operator, 2 days, 1000, 100, "acme mint", "https://mint.acme.dev")
         );
     }
 
@@ -42,7 +42,7 @@ contract PicocashVaultFactoryTest is Test {
 
     function test_isVault_falseForForeignContracts() public {
         _deploy();
-        PicocashVault rogue = new PicocashVault(address(token), operator, 0, "rogue", "http://rogue");
+        PicocashVault rogue = new PicocashVault(address(token), operator, 0, 500, 0, "rogue", "http://rogue");
         assertFalse(factory.isVault(address(rogue)));
         assertFalse(factory.isVault(address(token)));
     }
@@ -82,7 +82,7 @@ contract PicocashVaultFactoryTest is Test {
     function test_multipleVaults_enumerate() public {
         _deploy();
         vm.prank(customer);
-        factory.deployVault(address(token), makeAddr("op2"), 1 days, "second", "https://second.dev");
+        factory.deployVault(address(token), makeAddr("op2"), 1 days, 0, 500, "second", "https://second.dev");
         assertEq(factory.vaultCount(), 2);
         assertTrue(factory.isVault(factory.vaults(1)));
     }

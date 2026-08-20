@@ -30,10 +30,21 @@ contract PicocashVault is IPicocashVault {
     bytes8 private _activeKeysetId;
     uint256 public lastOutstanding;
     uint256 public lastPublishedAt;
+    uint256 public lastPublishedBlock;
+    uint256 public balanceAtLastPublish;
+
+    // --- publication policy, fixed at deployment (at least one rule set) ---
+    /// @notice Publish when balance drifts more than this many bps since the last publication (0 = unset).
+    uint16 public immutable publishThresholdBps;
+    /// @notice Max blocks between publications (0 = unset).
+    uint64 public immutable publishIntervalBlocks;
 
     error NotOperator();
     error NotPendingOperator();
     error DepositsArePaused();
+    error NoPublicationPolicy();
+    error InvalidThreshold();
+    error PublicationOverdue();
     error MeltAlreadyPaid(bytes32 meltId);
     error TimelockNotElapsed(uint256 eta);
     error ZeroAddress();
@@ -55,22 +66,34 @@ contract PicocashVault is IPicocashVault {
         address token_,
         address operator_,
         uint256 rotationTimelock_,
+        uint16 publishThresholdBps_,
+        uint64 publishIntervalBlocks_,
         string memory name_,
         string memory mintUrl_
     ) {
         if (token_ == address(0) || operator_ == address(0)) revert ZeroAddress();
         // The vault IS its token binding — refuse to deploy bound to nothing.
         if (token_.code.length == 0) revert TokenHasNoCode();
+        // Solvency publication is a commitment, not a courtesy: at least one rule.
+        if (publishThresholdBps_ == 0 && publishIntervalBlocks_ == 0) revert NoPublicationPolicy();
+        if (publishThresholdBps_ > 10_000) revert InvalidThreshold();
         _token = ITIP20(token_);
         _operator = operator_;
         rotationTimelock = rotationTimelock_;
+        publishThresholdBps = publishThresholdBps_;
+        publishIntervalBlocks = publishIntervalBlocks_;
         _name = name_;
         _mintUrl = mintUrl_;
     }
 
     /// @inheritdoc IPicocashVault
+    /// @dev Also gated on the publication policy's interval rule: a mint whose
+    ///      solvency attestation is overdue cannot take new allowance deposits.
+    ///      (Memo-path deposits are plain token transfers and cannot be gated
+    ///      here; the mint server enforces the same rule when issuing quotes.)
     function ecashMint(uint256 amount, bytes32 mintQuoteId) external {
         if (_depositsPaused) revert DepositsArePaused();
+        if (isPublicationOverdue()) revert PublicationOverdue();
         if (!_token.transferFrom(msg.sender, address(this), amount)) revert TokenTransferFailed();
         emit EcashMintDeposit(mintQuoteId, msg.sender, amount);
     }
@@ -88,9 +111,30 @@ contract PicocashVault is IPicocashVault {
 
     /// @inheritdoc IPicocashVault
     function publishOutstandingSupply(bytes8 keysetId, uint256 outstanding) external onlyOperator {
+        uint256 balance = _token.balanceOf(address(this));
         lastOutstanding = outstanding;
         lastPublishedAt = block.timestamp;
-        emit OutstandingSupplyPublished(keysetId, outstanding, _token.balanceOf(address(this)));
+        lastPublishedBlock = block.number;
+        balanceAtLastPublish = balance;
+        emit OutstandingSupplyPublished(keysetId, outstanding, balance);
+    }
+
+    /// @inheritdoc IPicocashVault
+    function isPublicationOverdue() public view returns (bool) {
+        if (publishIntervalBlocks == 0) return false;
+        if (lastPublishedBlock == 0) return true; // never attested
+        return block.number > lastPublishedBlock + publishIntervalBlocks;
+    }
+
+    /// @inheritdoc IPicocashVault
+    function isPublicationDue() public view returns (bool) {
+        if (isPublicationOverdue()) return true;
+        if (publishThresholdBps == 0) return false;
+        uint256 balance = _token.balanceOf(address(this));
+        uint256 base = balanceAtLastPublish;
+        if (base == 0) return balance > 0;
+        uint256 drift = balance > base ? balance - base : base - balance;
+        return drift * 10_000 > base * publishThresholdBps;
     }
 
     /// @inheritdoc IPicocashVault
@@ -117,7 +161,11 @@ contract PicocashVault is IPicocashVault {
             depositsPaused: _depositsPaused,
             balance: _token.balanceOf(address(this)),
             lastOutstanding: lastOutstanding,
-            lastPublishedAt: lastPublishedAt
+            lastPublishedAt: lastPublishedAt,
+            lastPublishedBlock: lastPublishedBlock,
+            publishThresholdBps: publishThresholdBps,
+            publishIntervalBlocks: publishIntervalBlocks,
+            publicationDue: isPublicationDue()
         });
     }
 

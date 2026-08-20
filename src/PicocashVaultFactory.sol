@@ -27,7 +27,9 @@ contract PicocashVaultFactory {
         address indexed operator,
         string name,
         string mintUrl,
-        uint256 rotationTimelock
+        uint256 rotationTimelock,
+        uint16 publishThresholdBps,
+        uint64 publishIntervalBlocks
     );
 
     /// @notice True iff the address was deployed by this factory.
@@ -37,18 +39,25 @@ contract PicocashVaultFactory {
 
     /// @notice Deploy a vault. The caller pays gas; `operator` (the mint's
     ///         key) controls the vault from birth — the factory and the caller
-    ///         retain nothing.
+    ///         retain nothing. The publication policy (at least one rule) is a
+    ///         deploy-time commitment: `publishThresholdBps` (publish when the
+    ///         backing drifts more than X bps) and/or `publishIntervalBlocks`
+    ///         (publish at least every X blocks).
     function deployVault(
         address token,
         address operator,
         uint256 rotationTimelock,
+        uint16 publishThresholdBps,
+        uint64 publishIntervalBlocks,
         string calldata name,
         string calldata mintUrl
     ) external returns (address vault) {
-        vault = address(new PicocashVault(token, operator, rotationTimelock, name, mintUrl));
+        vault = address(
+            new PicocashVault(token, operator, rotationTimelock, publishThresholdBps, publishIntervalBlocks, name, mintUrl)
+        );
         isVault[vault] = true;
         vaults.push(vault);
-        emit VaultDeployed(vault, token, operator, name, mintUrl, rotationTimelock);
+        emit VaultDeployed(vault, token, operator, name, mintUrl, rotationTimelock, publishThresholdBps, publishIntervalBlocks);
     }
 
     function vaultCount() external view returns (uint256) {

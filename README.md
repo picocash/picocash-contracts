@@ -31,14 +31,16 @@ Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.m
 
 ## Factory & discovery
 
-`PicocashVaultFactory.deployVault(token, operator, timelock, name, mintUrl)` is how vaults are born: permissionless, zero authority retained. `isVault(addr)` proves a vault runs the canonical bytecode (the one-call allowlist check for services), and `VaultDeployed` events plus the `vaults[]` array enumerate every picocash vault on the chain. Each vault's read-only `info()` returns the on-chain mint record — name, mint API URL, token, operator, active keyset, deposits-paused flag, live backing balance, and the last published outstanding supply with its timestamp. Discovery and solvency in a single `eth_call`: factory → vault → mint URL → keys, no off-chain registry.
+`PicocashVaultFactory.deployVault(token, operator, timelock, publishThresholdBps, publishIntervalBlocks, name, mintUrl)` is how vaults are born: permissionless, zero authority retained. `isVault(addr)` proves a vault runs the canonical bytecode (the one-call allowlist check for services), and `VaultDeployed` events plus the `vaults[]` array enumerate every picocash vault on the chain. Each vault's read-only `info()` returns the on-chain mint record — name, mint API URL, token, operator, active keyset, deposits-paused flag, live backing balance, the last published outstanding supply with its timestamp, and the publication policy with its current due-state. Discovery and solvency in a single `eth_call`: factory → vault → mint URL → keys, no off-chain registry.
+
+**Publication policy**: every vault commits at deployment to at least one solvency-publication rule — a balance-drift threshold (bps) that makes a publication *due*, and/or a block interval whose breach makes it *overdue*. While overdue, `ecashMint` (allowance deposits) reverts — a mint that stops attesting stops taking new money; `ecashMelt` is never affected. `isPublicationDue()` / `isPublicationOverdue()` make both rules machine-checkable, so silence from a mint has a defined, queryable meaning.
 
 ## Deployments
 
 | Network | Contract | Address |
 |---|---|---|
-| Moderato (testnet, 42431) | **PicocashVaultFactory** | `0x54b7b22c660Bd2e32c0403A3F3D2A454f92DD192` |
-| Moderato (testnet, 42431) | PicocashVault (dev mint, via factory) | `0x91Dd6be2EF2e363b088b2EEf5a20d32f10b455be` |
+| Moderato (testnet, 42431) | **PicocashVaultFactory** | `0x265575FB832A0beD1cb2eB565569c4b23aD79518` |
+| Moderato (testnet, 42431) | PicocashVault (dev mint, via factory) | `0x64Fa5173dF59adcdAAe6e2F0E7cb70bE692C9ce2` |
 
 Token pathUSD `0x20c0…0000`, 2-day rotation timelock, test funds only.
 

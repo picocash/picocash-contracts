@@ -38,6 +38,14 @@ interface IPicocashVault {
         uint256 lastOutstanding;
         /// @dev Timestamp of the last solvency publication (0 if never).
         uint256 lastPublishedAt;
+        /// @dev Block of the last solvency publication (0 if never).
+        uint256 lastPublishedBlock;
+        /// @dev Publication policy: publish when balance drifts more than this many bps (0 = rule unset).
+        uint16 publishThresholdBps;
+        /// @dev Publication policy: max blocks between publications (0 = rule unset).
+        uint64 publishIntervalBlocks;
+        /// @dev True when either policy rule says a publication should happen now.
+        bool publicationDue;
     }
 
     /// @notice Emitted for allowance-based deposits (the memo-transfer flow
@@ -91,6 +99,19 @@ interface IPicocashVault {
     /// @notice One-call discovery + solvency read: everything a client needs
     ///         to find the mint and judge its backing.
     function info() external view returns (MintInfo memory);
+
+    /// @notice HARD policy breach: the interval rule is set and more than
+    ///         `publishIntervalBlocks` blocks have passed since the last
+    ///         publication (or none was ever made). While overdue, allowance
+    ///         deposits (`ecashMint`) revert — a mint that stops attesting
+    ///         stops taking new money. Withdrawals are never affected.
+    function isPublicationOverdue() external view returns (bool);
+
+    /// @notice SOFT policy trigger: overdue per the interval rule, OR the
+    ///         threshold rule is set and the backing balance has drifted more
+    ///         than `publishThresholdBps` since the last publication. The
+    ///         operator's publish job polls this.
+    function isPublicationDue() external view returns (bool);
 
     function token() external view returns (address);
     function operator() external view returns (address);
