@@ -33,7 +33,7 @@ Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.m
 
 | Network | Address | Token | Notes |
 |---|---|---|---|
-| Moderato (testnet, 42431) | `0x8431C3ce797995B75d18c30cBe9a06B9F1D377B9` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
+| Moderato (testnet, 42431) | `0x1607001B73dC69C559376299354b17C72906123f` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
 
 ## Security
 

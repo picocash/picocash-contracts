@@ -33,8 +33,8 @@ contract PicocashVaultTest is Test {
         vm.startPrank(alice);
         token.approve(address(vault), 1_000_000);
         vm.expectEmit(true, true, false, true);
-        emit IPicocashVault.DepositReceived(bytes32(uint256(1)), alice, 1_000_000);
-        vault.deposit(1_000_000, bytes32(uint256(1)));
+        emit IPicocashVault.EcashMintDeposit(bytes32(uint256(1)), alice, 1_000_000);
+        vault.ecashMint(1_000_000, bytes32(uint256(1)));
         vm.stopPrank();
         assertEq(token.balanceOf(address(vault)), 1_000_000);
     }
@@ -45,7 +45,7 @@ contract PicocashVaultTest is Test {
         vm.startPrank(alice);
         token.approve(address(vault), 1);
         vm.expectRevert(PicocashVault.DepositsArePaused.selector);
-        vault.deposit(1, bytes32(0));
+        vault.ecashMint(1, bytes32(0));
         vm.stopPrank();
     }
 
@@ -59,16 +59,16 @@ contract PicocashVaultTest is Test {
         _fund(100);
         vm.prank(alice);
         vm.expectRevert(PicocashVault.NotOperator.selector);
-        vault.withdraw(bob, 100, bytes32(uint256(7)));
+        vault.ecashMelt(bob, 100, bytes32(uint256(7)));
     }
 
     function test_withdraw_paysOncePerMeltId() public {
         _fund(200);
         vm.startPrank(operator);
-        vault.withdraw(bob, 100, bytes32(uint256(7)));
+        vault.ecashMelt(bob, 100, bytes32(uint256(7)));
         assertEq(token.balanceOf(bob), 100);
         vm.expectRevert(abi.encodeWithSelector(PicocashVault.MeltAlreadyPaid.selector, bytes32(uint256(7))));
-        vault.withdraw(bob, 100, bytes32(uint256(7)));
+        vault.ecashMelt(bob, 100, bytes32(uint256(7)));
         vm.stopPrank();
     }
 
@@ -77,7 +77,7 @@ contract PicocashVaultTest is Test {
         _fund(100);
         vm.startPrank(operator);
         vault.setDepositsPaused(true);
-        vault.withdraw(bob, 100, bytes32(uint256(9)));
+        vault.ecashMelt(bob, 100, bytes32(uint256(9)));
         vm.stopPrank();
         assertEq(token.balanceOf(bob), 100);
     }
@@ -87,9 +87,9 @@ contract PicocashVaultTest is Test {
         vm.prank(operator);
         if (requested > funded) {
             vm.expectRevert();
-            vault.withdraw(bob, requested, bytes32(uint256(1)));
+            vault.ecashMelt(bob, requested, bytes32(uint256(1)));
         } else {
-            vault.withdraw(bob, requested, bytes32(uint256(1)));
+            vault.ecashMelt(bob, requested, bytes32(uint256(1)));
             assertEq(token.balanceOf(bob), requested);
             assertEq(token.balanceOf(address(vault)), uint256(funded) - requested);
         }

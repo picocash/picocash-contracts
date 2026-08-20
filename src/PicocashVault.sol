@@ -13,7 +13,7 @@ interface ITIP20 {
 /// @notice See IPicocashVault for the design constraints. The primary deposit
 ///         flow is a TIP-20 `transferWithMemo(vault, amount, quoteId)` straight
 ///         to this contract's address (the mint watches the token's event);
-///         `deposit()` is the allowance-based fallback for memo-less callers.
+///         `ecashMint()` is the allowance-based fallback for memo-less callers.
 contract PicocashVault is IPicocashVault {
     ITIP20 private immutable _token;
     address private _operator;
@@ -54,21 +54,21 @@ contract PicocashVault is IPicocashVault {
     }
 
     /// @inheritdoc IPicocashVault
-    function deposit(uint256 amount, bytes32 mintQuoteId) external {
+    function ecashMint(uint256 amount, bytes32 mintQuoteId) external {
         if (_depositsPaused) revert DepositsArePaused();
         if (!_token.transferFrom(msg.sender, address(this), amount)) revert TokenTransferFailed();
-        emit DepositReceived(mintQuoteId, msg.sender, amount);
+        emit EcashMintDeposit(mintQuoteId, msg.sender, amount);
     }
 
     /// @inheritdoc IPicocashVault
     /// @dev Deliberately no pause check anywhere on this path: withdrawals are
     ///      never pausable. Holders must always be able to exit.
-    function withdraw(address to, uint256 amount, bytes32 meltId) external onlyOperator {
+    function ecashMelt(address to, uint256 amount, bytes32 meltId) external onlyOperator {
         if (to == address(0)) revert ZeroAddress();
         if (meltPaid[meltId]) revert MeltAlreadyPaid(meltId);
         meltPaid[meltId] = true;
         if (!_token.transfer(to, amount)) revert TokenTransferFailed();
-        emit WithdrawalExecuted(meltId, to, amount);
+        emit EcashMeltPayout(meltId, to, amount);
     }
 
     /// @inheritdoc IPicocashVault
