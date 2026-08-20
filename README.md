@@ -29,11 +29,18 @@ forge test
 
 Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.moderato.tempo.xyz`) first; mainnet only behind the reference mint's hard caps. Note Tempo has no native gas token: fees are paid in the TIP-20 being transferred.
 
+## Factory & discovery
+
+`PicocashVaultFactory.deployVault(token, operator, timelock, name, mintUrl)` is how vaults are born: permissionless, zero authority retained. `isVault(addr)` proves a vault runs the canonical bytecode (the one-call allowlist check for services), and `VaultDeployed` events plus the `vaults[]` array enumerate every picocash vault on the chain. Each vault's read-only `info()` returns the on-chain mint record — name, mint API URL, token, operator, active keyset, deposits-paused flag, live backing balance, and the last published outstanding supply with its timestamp. Discovery and solvency in a single `eth_call`: factory → vault → mint URL → keys, no off-chain registry.
+
 ## Deployments
 
-| Network | Address | Token | Notes |
-|---|---|---|---|
-| Moderato (testnet, 42431) | `0x91Dd6be2EF2e363b088b2EEf5a20d32f10b455be` | pathUSD `0x20c0…0000` | 2-day rotation timelock; test funds only |
+| Network | Contract | Address |
+|---|---|---|
+| Moderato (testnet, 42431) | **PicocashVaultFactory** | `0x54b7b22c660Bd2e32c0403A3F3D2A454f92DD192` |
+| Moderato (testnet, 42431) | PicocashVault (dev mint, via factory) | `0x91Dd6be2EF2e363b088b2EEf5a20d32f10b455be` |
+
+Token pathUSD `0x20c0…0000`, 2-day rotation timelock, test funds only.
 
 ## Security
 
