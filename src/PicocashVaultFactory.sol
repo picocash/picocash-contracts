@@ -32,7 +32,9 @@ contract PicocashVaultFactory {
         uint16 publishThresholdBps,
         uint64 publishIntervalBlocks,
         uint256 maxMeltFee,
-        uint64 emergencyGraceBlocks
+        uint64 emergencyGraceBlocks,
+        uint16 meltLimitBps,
+        uint64 meltEpochBlocks
     );
 
     /// @notice True iff the address was deployed by this factory.
@@ -61,7 +63,9 @@ contract PicocashVaultFactory {
         uint256 maxMeltFee,
         string calldata name,
         string calldata mintUrl,
-        uint64 emergencyGraceBlocks
+        uint64 emergencyGraceBlocks,
+        uint16 meltLimitBps,
+        uint64 meltEpochBlocks
     ) external returns (address vault) {
         vault = address(
             new PicocashVault(
@@ -74,7 +78,9 @@ contract PicocashVaultFactory {
                 name,
                 mintUrl,
                 emergencyVerifier,
-                emergencyGraceBlocks
+                emergencyGraceBlocks,
+                meltLimitBps,
+                meltEpochBlocks
             )
         );
         isVault[vault] = true;
@@ -89,7 +95,9 @@ contract PicocashVaultFactory {
             publishThresholdBps,
             publishIntervalBlocks,
             maxMeltFee,
-            emergencyGraceBlocks
+            emergencyGraceBlocks,
+            meltLimitBps,
+            meltEpochBlocks
         );
     }
 

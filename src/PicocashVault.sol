@@ -59,6 +59,19 @@ contract PicocashVault is IPicocashVault {
     /// @notice Running total paid out through emergencyRedeem.
     uint256 public emergencyRedeemed;
 
+    // --- withdrawal circuit breaker (PIP-04 §Withdrawal breaker): bounds operator payouts per epoch ---
+    /// @notice Max melt volume per epoch, in bps of the backing balance at epoch start (0 = breaker disabled).
+    uint16 public meltLimitBps;
+    uint16 public pendingMeltLimitBps;
+    uint256 public meltLimitIncreaseEta;
+    uint64 public immutable meltEpochBlocks;
+    uint256 public epochStart;
+    uint256 public epochBaseline;
+    uint256 public epochMelted;
+    /// @notice Block at which the breaker latched (0 = not tripped). While set: no melts, no deposits, emergency exit open.
+    uint256 public breakerTrippedAt;
+    uint256 public breakerResetEta;
+
     error NotOperator();
     error NotPendingOperator();
     error DepositsArePaused();
@@ -81,6 +94,10 @@ contract PicocashVault is IPicocashVault {
     error KeysetKeyUnknown(bytes8 keysetId, uint256 amount);
     error EmergencyAlreadyRedeemed(bytes32 y);
     error EmergencyCapExceeded(uint256 cap);
+    error InvalidBreakerConfig();
+    error BreakerTripped(uint256 sinceBlock);
+    error MeltLimitExceeded(uint256 remainingThisEpoch);
+    error NoPendingReset();
 
     event OperatorProposed(address indexed newOperator, uint256 eta);
     event OperatorRotated(address indexed oldOperator, address indexed newOperator);
@@ -88,6 +105,13 @@ contract PicocashVault is IPicocashVault {
     event Swept(address indexed strandedToken, address indexed to, uint256 amount);
     event KeysetRegistered(bytes8 indexed keysetId, uint256 count);
     event EmergencyRedeemed(bytes32 indexed y, bytes8 indexed keysetId, uint256 amount, address indexed to);
+    event BreakerEpoch(uint256 startBlock, uint256 baseline, uint256 allowance);
+    event BreakerTrippedEvent(uint256 block_, uint256 melted, uint256 allowance);
+    event BreakerResetProposed(uint256 eta);
+    event BreakerReset();
+    event MeltLimitDecreased(uint16 newBps);
+    event MeltLimitIncreaseProposed(uint16 newBps, uint256 eta);
+    event MeltLimitIncreased(uint16 newBps);
 
     modifier onlyOperator() {
         if (msg.sender != _operator) revert NotOperator();
@@ -104,7 +128,9 @@ contract PicocashVault is IPicocashVault {
         string memory name_,
         string memory mintUrl_,
         PicocashEmergencyVerifier emergencyVerifier_,
-        uint64 emergencyGraceBlocks_
+        uint64 emergencyGraceBlocks_,
+        uint16 meltLimitBps_,
+        uint64 meltEpochBlocks_
     ) {
         if (token_ == address(0) || operator_ == address(0)) {
             revert ZeroAddress();
@@ -118,6 +144,11 @@ contract PicocashVault is IPicocashVault {
         if (emergencyGraceBlocks_ != 0 && (publishIntervalBlocks_ == 0 || address(emergencyVerifier_) == address(0))) {
             revert InvalidEmergencyConfig();
         }
+        // The breaker needs both a limit and an epoch, or neither; and tripping must have an exit to open.
+        if ((meltLimitBps_ == 0) != (meltEpochBlocks_ == 0) || meltLimitBps_ > 10_000) revert InvalidBreakerConfig();
+        if (meltLimitBps_ != 0 && address(emergencyVerifier_) == address(0)) revert InvalidBreakerConfig();
+        meltLimitBps = meltLimitBps_;
+        meltEpochBlocks = meltEpochBlocks_;
         emergencyVerifier = emergencyVerifier_;
         emergencyGraceBlocks = emergencyGraceBlocks_;
         deployBlock = block.number;
@@ -139,6 +170,7 @@ contract PicocashVault is IPicocashVault {
     function ecashMint(uint256 amount, bytes32 mintQuoteId) external {
         if (_depositsPaused) revert DepositsArePaused();
         if (isPublicationOverdue()) revert PublicationOverdue();
+        if (breakerTrippedAt != 0) revert BreakerTripped(breakerTrippedAt);
         if (!_token.transferFrom(msg.sender, address(this), amount)) revert TokenTransferFailed();
         emit EcashMintDeposit(mintQuoteId, msg.sender, amount);
     }
@@ -149,6 +181,7 @@ contract PicocashVault is IPicocashVault {
     function ecashMelt(address to, uint256 amount, bytes32 meltId) external onlyOperator {
         if (to == address(0)) revert ZeroAddress();
         if (meltPaid[meltId]) revert MeltAlreadyPaid(meltId);
+        _consumeMeltAllowance(amount);
         meltPaid[meltId] = true;
         if (!_token.transfer(to, amount)) revert TokenTransferFailed();
         emit EcashMeltPayout(meltId, to, amount);
@@ -240,6 +273,97 @@ contract PicocashVault is IPicocashVault {
     }
 
     // ------------------------------------------------------------------
+    // Withdrawal circuit breaker — PIP-04 §Withdrawal breaker
+    // ------------------------------------------------------------------
+
+    /// @dev Roll the epoch if due, enforce the allowance, latch the breaker when the allowance is consumed.
+    function _consumeMeltAllowance(uint256 amount) private {
+        if (meltLimitBps == 0) return;
+        if (breakerTrippedAt != 0) revert BreakerTripped(breakerTrippedAt);
+        if (epochStart == 0 || block.number >= epochStart + meltEpochBlocks) {
+            epochStart = block.number;
+            epochBaseline = _token.balanceOf(address(this));
+            epochMelted = 0;
+            emit BreakerEpoch(epochStart, epochBaseline, (epochBaseline * meltLimitBps) / 10_000);
+        }
+        uint256 allowance = (epochBaseline * meltLimitBps) / 10_000;
+        if (epochMelted + amount > allowance) {
+            revert MeltLimitExceeded(allowance > epochMelted ? allowance - epochMelted : 0);
+        }
+        epochMelted += amount;
+        if (epochMelted >= allowance) {
+            breakerTrippedAt = block.number;
+            emit BreakerTrippedEvent(block.number, epochMelted, allowance);
+        }
+    }
+
+    /// @notice Live breaker state for wallets and the status page.
+    function breakerInfo()
+        external
+        view
+        returns (
+            uint16 limitBps,
+            uint64 epochBlocks,
+            uint256 epochStart_,
+            uint256 baseline,
+            uint256 allowance,
+            uint256 melted,
+            uint256 trippedAt
+        )
+    {
+        bool rolled = meltLimitBps != 0 && (epochStart == 0 || block.number >= epochStart + meltEpochBlocks);
+        uint256 base = rolled ? _token.balanceOf(address(this)) : epochBaseline;
+        return (
+            meltLimitBps,
+            meltEpochBlocks,
+            rolled ? block.number : epochStart,
+            base,
+            (base * meltLimitBps) / 10_000,
+            rolled ? 0 : epochMelted,
+            breakerTrippedAt
+        );
+    }
+
+    /// @notice Tightening the breaker is always allowed immediately.
+    function decreaseMeltLimit(uint16 newBps) external onlyOperator {
+        if (meltLimitBps == 0 || newBps == 0 || newBps >= meltLimitBps) revert NotADecrease();
+        meltLimitBps = newBps;
+        emit MeltLimitDecreased(newBps);
+    }
+
+    /// @notice Loosening it takes the rotation timelock — public notice before more can leave per epoch.
+    function proposeMeltLimitIncrease(uint16 newBps) external onlyOperator {
+        if (meltLimitBps == 0 || newBps <= meltLimitBps || newBps > 10_000) revert NotAnIncrease();
+        pendingMeltLimitBps = newBps;
+        meltLimitIncreaseEta = block.timestamp + rotationTimelock;
+        emit MeltLimitIncreaseProposed(newBps, meltLimitIncreaseEta);
+    }
+
+    function applyMeltLimitIncrease() external onlyOperator {
+        if (pendingMeltLimitBps == 0) revert NoPendingIncrease();
+        if (block.timestamp < meltLimitIncreaseEta) revert TimelockNotElapsed(meltLimitIncreaseEta);
+        meltLimitBps = pendingMeltLimitBps;
+        pendingMeltLimitBps = 0;
+        emit MeltLimitIncreased(meltLimitBps);
+    }
+
+    /// @notice Un-latching a tripped breaker takes the rotation timelock; holders can exit throughout.
+    function proposeBreakerReset() external onlyOperator {
+        if (breakerTrippedAt == 0) revert NoPendingReset();
+        breakerResetEta = block.timestamp + rotationTimelock;
+        emit BreakerResetProposed(breakerResetEta);
+    }
+
+    function applyBreakerReset() external onlyOperator {
+        if (breakerTrippedAt == 0 || breakerResetEta == 0) revert NoPendingReset();
+        if (block.timestamp < breakerResetEta) revert TimelockNotElapsed(breakerResetEta);
+        breakerTrippedAt = 0;
+        breakerResetEta = 0;
+        epochStart = 0; // next melt starts a fresh epoch from the current balance
+        emit BreakerReset();
+    }
+
+    // ------------------------------------------------------------------
     // Emergency redemption — PIP-04 §Emergency redemption
     // ------------------------------------------------------------------
 
@@ -269,6 +393,7 @@ contract PicocashVault is IPicocashVault {
     /// @notice True once the attestation has been overdue for longer than the grace period. Nobody flips this:
     ///         it is a function of the last publication and the block number; publishing again clears it.
     function emergencyMode() public view returns (bool) {
+        if (breakerTrippedAt != 0) return true; // a tripped breaker opens the exit immediately
         if (emergencyGraceBlocks == 0 || publishIntervalBlocks == 0) return false;
         uint256 since = (lastPublishedBlock == 0 ? deployBlock : lastPublishedBlock) + publishIntervalBlocks;
         return block.number > since + emergencyGraceBlocks;

@@ -28,7 +28,7 @@ contract EmergencyRedemptionTest is Test {
         factory = new PicocashVaultFactory();
         vault = PicocashVault(
             factory.deployVault(
-                address(token), operator, 2 days, 1000, INTERVAL, 100_000, "em", "https://em.test", GRACE
+                address(token), operator, 2 days, 1000, INTERVAL, 100_000, "em", "https://em.test", GRACE, 0, 0
             )
         );
         json = vm.readFile("test/vectors/emergency.json");
@@ -192,7 +192,9 @@ contract EmergencyRedemptionTest is Test {
     function test_neverAttested_capIsBalance_andRegistryIsAppendOnly() public {
         // fresh vault that never publishes: emergency after deploy + interval + grace, cap = balance
         PicocashVault v = PicocashVault(
-            factory.deployVault(address(token), operator, 2 days, 1000, INTERVAL, 100_000, "x", "https://x", GRACE)
+            factory.deployVault(
+                address(token), operator, 2 days, 1000, INTERVAL, 100_000, "x", "https://x", GRACE, 0, 0
+            )
         );
         token.mint(address(v), 20);
         vm.roll(block.number + INTERVAL + GRACE + 1);
@@ -213,6 +215,6 @@ contract EmergencyRedemptionTest is Test {
 
     function test_graceWithoutInterval_reverts() public {
         vm.expectRevert(PicocashVault.InvalidEmergencyConfig.selector);
-        factory.deployVault(address(token), operator, 2 days, 1000, 0, 100_000, "x", "https://x", GRACE);
+        factory.deployVault(address(token), operator, 2 days, 1000, 0, 100_000, "x", "https://x", GRACE, 0, 0);
     }
 }
