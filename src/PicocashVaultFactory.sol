@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {PicocashVault} from "./PicocashVault.sol";
+import {PicocashEmergencyVerifier} from "./emergency/PicocashEmergencyVerifier.sol";
 
 /// @title PicocashVaultFactory — canonical deployer & registry for picocash vaults
 /// @notice A mint operator (or the customer entity that will hold custody) calls
@@ -30,13 +31,20 @@ contract PicocashVaultFactory {
         uint256 rotationTimelock,
         uint16 publishThresholdBps,
         uint64 publishIntervalBlocks,
-        uint256 maxMeltFee
+        uint256 maxMeltFee,
+        uint64 emergencyGraceBlocks
     );
 
     /// @notice True iff the address was deployed by this factory.
     mapping(address vault => bool) public isVault;
     /// @notice Every vault ever deployed, in order.
     address[] public vaults;
+    /// @notice The stateless proof verifier every vault from this factory uses for emergency redemption.
+    PicocashEmergencyVerifier public immutable emergencyVerifier;
+
+    constructor() {
+        emergencyVerifier = new PicocashEmergencyVerifier();
+    }
 
     /// @notice Deploy a vault. The caller pays gas; `operator` (the mint's
     ///         key) controls the vault from birth — the factory and the caller
@@ -52,11 +60,21 @@ contract PicocashVaultFactory {
         uint64 publishIntervalBlocks,
         uint256 maxMeltFee,
         string calldata name,
-        string calldata mintUrl
+        string calldata mintUrl,
+        uint64 emergencyGraceBlocks
     ) external returns (address vault) {
         vault = address(
             new PicocashVault(
-                token, operator, rotationTimelock, publishThresholdBps, publishIntervalBlocks, maxMeltFee, name, mintUrl
+                token,
+                operator,
+                rotationTimelock,
+                publishThresholdBps,
+                publishIntervalBlocks,
+                maxMeltFee,
+                name,
+                mintUrl,
+                emergencyVerifier,
+                emergencyGraceBlocks
             )
         );
         isVault[vault] = true;
@@ -70,7 +88,8 @@ contract PicocashVaultFactory {
             rotationTimelock,
             publishThresholdBps,
             publishIntervalBlocks,
-            maxMeltFee
+            maxMeltFee,
+            emergencyGraceBlocks
         );
     }
 

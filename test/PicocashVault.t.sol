@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {PicocashVault} from "../src/PicocashVault.sol";
+import {PicocashEmergencyVerifier} from "../src/emergency/PicocashEmergencyVerifier.sol";
 import {IPicocashVault} from "../src/interfaces/IPicocashVault.sol";
 import {MockTIP20} from "./mocks/MockTIP20.sol";
 
@@ -14,10 +15,14 @@ contract PicocashVaultTest is Test {
     address bob = makeAddr("bob");
     uint256 constant TIMELOCK = 2 days;
 
+    PicocashEmergencyVerifier verifier;
+
     function setUp() public {
+        verifier = new PicocashEmergencyVerifier();
         token = new MockTIP20();
-        vault =
-            new PicocashVault(address(token), operator, TIMELOCK, 1000, 100, 100_000, "test mint", "http://mint.test");
+        vault = new PicocashVault(
+            address(token), operator, TIMELOCK, 1000, 100, 100_000, "test mint", "http://mint.test", verifier, 50
+        );
         token.mint(alice, 10_000_000); // $10
         // a vault with an interval rule is born overdue; establish the baseline attestation
         vm.prank(operator);
@@ -113,7 +118,9 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_rejectsCodelessToken() public {
         vm.expectRevert(PicocashVault.TokenHasNoCode.selector);
-        new PicocashVault(makeAddr("not-a-contract"), operator, TIMELOCK, 1000, 0, 100_000, "x", "http://x");
+        new PicocashVault(
+            makeAddr("not-a-contract"), operator, TIMELOCK, 1000, 0, 100_000, "x", "http://x", verifier, 0
+        );
     }
 
     function test_sweep_returnsStrandedTokens_neverBacking() public {
@@ -139,9 +146,9 @@ contract PicocashVaultTest is Test {
 
     function test_constructor_requiresAPolicy() public {
         vm.expectRevert(PicocashVault.NoPublicationPolicy.selector);
-        new PicocashVault(address(token), operator, TIMELOCK, 0, 0, 100_000, "x", "http://x");
+        new PicocashVault(address(token), operator, TIMELOCK, 0, 0, 100_000, "x", "http://x", verifier, 0);
         vm.expectRevert(PicocashVault.InvalidThreshold.selector);
-        new PicocashVault(address(token), operator, TIMELOCK, 10_001, 0, 100_000, "x", "http://x");
+        new PicocashVault(address(token), operator, TIMELOCK, 10_001, 0, 100_000, "x", "http://x", verifier, 0);
     }
 
     function test_overdue_blocksAllowanceDeposits_neverMelts() public {
