@@ -10,4 +10,5 @@ Priority surfaces for this repo:
 2. **Withdrawal liveness** — anything that can pause, freeze, or grief melts (payouts must never be contract-pausable).
 3. **Deposit binding** — memo confusion: crediting the wrong quote, replaying a memo, or double-crediting across the memo-transfer and allowance flows.
 4. **Operator rotation** — timelock bypasses.
-5. **Emergency verifier (prototype, `src/emergency/`)** — curve-arithmetic edge cases (infinity, doubling branches, non-canonical scalars), hash_to_curve divergence from the reference, DLEQ forgeries.
+5. **Withdrawal breaker** — allowance accounting across epoch boundaries, latch bypasses, anything that lets the operator key pay out past the allowance or un-latch without the timelock.
+6. **Emergency verifier (prototype, `src/emergency/`)** — curve-arithmetic edge cases (infinity, doubling branches, non-canonical scalars), hash_to_curve divergence from the reference, DLEQ forgeries.
