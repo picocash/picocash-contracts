@@ -25,6 +25,7 @@ forge test
 
 - `src/interfaces/` — `IPicocashVault` (draft)
 - `src/PicocashVault.sol` — implemented and deployed (see Deployments)
+- `src/emergency/` — **prototype** on-chain eCash proof verifier (`Secp256k1.sol`, `EcashProofVerifier.sol`) for PIP-04 §Emergency redemption: verifies a token's DLEQ with only the mint's public key, ≈1.75 M gas per proof, tested against vectors from the reference TypeScript crypto. Not yet wired into the vault.
 - `test/` — Foundry tests incl. fuzzed withdraw-vs-balance, rotation timelock, and sweep guards
 
 Target chain: Tempo — testnet **Moderato** (chain id 42431, RPC `https://rpc.moderato.tempo.xyz`) first; mainnet only behind the reference mint's hard caps. Note Tempo has no native gas token: fees are paid in the TIP-20 being transferred.
