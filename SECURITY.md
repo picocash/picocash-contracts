@@ -12,3 +12,4 @@ Priority surfaces for this repo:
 4. **Operator rotation** — timelock bypasses.
 5. **Withdrawal breaker** — allowance accounting across epoch boundaries, latch bypasses, anything that lets the operator key pay out past the allowance or un-latch without the timelock.
 6. **Emergency verifier (prototype, `src/emergency/`)** — curve-arithmetic edge cases (infinity, doubling branches, non-canonical scalars), hash_to_curve divergence from the reference, DLEQ forgeries.
+| Breaker under-limit drain | An operator can melt just under the allowance every epoch without tripping the breaker. | Loss rate bounded at `meltLimitBps` per epoch, fully visible in `breakerInfo()` and on the status page; holders' normal melts keep working. | Wallets/services alert on sustained utilisation; mints size the limit to a small multiple of honest volume; cumulative multi-epoch caps are an open PIP-04 item. |
